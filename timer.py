@@ -1,6 +1,45 @@
 import time
 import csv
+import math
 import curses
+import subprocess
+import hashlib
+import os
+import logging
+
+# Set up logging
+logging.basicConfig(filename="timer.log", level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
+
+
+def check_git_pull():
+    """Performs a git pull and checks if any changes were made."""
+    result = subprocess.run(["git", "pull"], capture_output=True, text=True)
+    logging.info(f"git check results: {result}")
+    return "Already up to date." not in result.stdout
+
+def parse_properties(filename):
+    properties = {}
+    with open(filename, "r") as f:
+        for line in f:
+            key, value = line.strip().split("=", 1)
+            properties[key] = value
+    return properties
+
+def download_timesheet(properties):
+    if not properties['remote_save'] == "true":
+        return
+    """Downloads timesheet.csv from the remote system using SCP."""
+    logging.info(f"Downloading latest version of timesheet...")
+    remote_path = f"{properties['host']}:{properties['path']}/timesheet.csv"
+    subprocess.run(["scp", remote_path, "timesheet.csv"])
+
+def upload_timesheet(properties):
+    if not properties['remote_save'] == "true":
+        return
+    """Uploads timesheet.csv to the remote system using SCP."""
+    logging.info(f"Uploading latest version of timesheet...")
+    remote_path = f"{properties['host']}:{properties['path']}/timesheet.csv"
+    subprocess.run(["scp", "timesheet.csv", remote_path])
 
 def format_time(duration):
     """Format duration as hours, minutes, and seconds"""
@@ -76,12 +115,30 @@ def input_project(stdscr):
 
 def main(stdscr):
     """Main function"""
+     # Read properties from the timer.properties file
+    properties = parse_properties("timer.properties")
+
+    # Perform a git pull to ensure the latest version of the code
+    if check_git_pull():
+        stdscr.clear()
+        stdscr.addstr(0, 0, "A new version of the script has been downloaded.")
+        stdscr.addstr(1, 0, "Please restart the script.")
+        stdscr.refresh()
+        while True:
+            c = stdscr.getch()
+            if c == ord('q'):
+                return
+
+    # Download timesheet.csv from the remote system
+    download_timesheet(properties)
+
+
     global start_time
     curses.curs_set(1)
     curses.init_pair(1, curses.COLOR_WHITE, curses.COLOR_BLACK)
     curses.init_pair(2, curses.COLOR_BLACK, curses.COLOR_WHITE)
     stdscr.bkgd(curses.color_pair(2))
-    stdscr.timeout(100)  # Set timeout to 1000 ms (1 second)
+#    stdscr.timeout(1000)  # Set timeout to 1000 ms (1 second)
 
     # Enter a description
     stdscr.addstr(0, 0, "Enter a description:", curses.color_pair(1))
@@ -114,7 +171,8 @@ def main(stdscr):
     stdscr.clear()
     stdscr.addstr(0, 0, "Press 's' to start the timer...")
     stdscr.refresh()
-
+    stdscr.timeout(500) # Set timeout to 1000 ms (1 second)
+    
     while True:
         c = stdscr.getch()
         if c == ord('s'):
@@ -140,6 +198,12 @@ def main(stdscr):
             stdscr.refresh()
             elapsed_time = time.time() - start_time
             save_time(description, project, elapsed_time)
+            
+            # Download again in case another system has updated this file since we last checked
+            download_timesheet(properties)
+            # Upload timesheet.csv to the remote system
+            upload_timesheet(properties)
+            
             break
         current_time = time.time()
         elapsed_time = current_time - start_time
