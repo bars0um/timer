@@ -197,10 +197,12 @@ def main(stdscr):
             stdscr.addstr(0, 0, "Timer stopped at {}".format(time.strftime("%Y-%m-%d %H:%M:%S")))
             stdscr.refresh()
             elapsed_time = time.time() - start_time
-            save_time(description, project, elapsed_time)
             
             # Download again in case another system has updated this file since we last checked
             download_timesheet(properties)
+            
+            save_time(description, project, elapsed_time)
+            
             # Upload timesheet.csv to the remote system
             upload_timesheet(properties)
             
