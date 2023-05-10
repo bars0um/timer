@@ -113,6 +113,42 @@ def input_project(stdscr):
         stdscr.refresh()
     return project
 
+def select_description(stdscr, descriptions):
+    """Select a description from the last 3 tasks or enter a new one"""
+    selected_index = -1
+    custom_description = ""
+    while True:
+        stdscr.clear()
+        stdscr.addstr(0, 0, "Select a description or enter a new one:")
+        for i, desc in enumerate(descriptions):
+            if i == selected_index:
+                stdscr.addstr(i+1, 0, "> {}".format(desc))
+            else:
+                stdscr.addstr(i+1, 0, "  {}".format(desc))
+        stdscr.addstr(len(descriptions)+1, 0, "Custom: {}".format(custom_description))
+        stdscr.refresh()
+        c = stdscr.getch()
+        if c == curses.KEY_UP:
+            selected_index = max(-1, selected_index - 1)
+        elif c == curses.KEY_DOWN:
+            selected_index = min(len(descriptions) - 1, selected_index + 1)
+        elif c == ord('\n'):
+            return descriptions[selected_index] if selected_index >= 0 else custom_description
+        elif c == curses.KEY_BACKSPACE:
+            custom_description = custom_description[:-1]
+        else:
+            custom_description += chr(c)
+
+def last_descriptions_from_csv(n=3):
+    """Retrieve the last n descriptions from the CSV file"""
+    descriptions = []
+    with open("timesheet.csv", newline="") as f:
+        reader = csv.reader(f)
+        for row in reader:
+            if len(row) > 2:
+                descriptions.append(row[2])
+    return descriptions[-n:]
+
 def main(stdscr):
     """Main function"""
      # Read properties from the timer.properties file
@@ -140,21 +176,27 @@ def main(stdscr):
     stdscr.bkgd(curses.color_pair(2))
 #    stdscr.timeout(1000)  # Set timeout to 1000 ms (1 second)
 
-    # Enter a description
-    stdscr.addstr(0, 0, "Enter a description:", curses.color_pair(1))
-    stdscr.refresh()
-    description = ""
-    while True:
-        c = stdscr.getch()
-        if c == ord('\n'):
-            break
-        elif c == curses.KEY_BACKSPACE or c == 127:
-            description = description[:-1]
-        elif c != -1:  # Ignore timeout (-1)
-            description += chr(c)
-        stdscr.clear()
-        stdscr.addstr(0, 0, "Enter a description: {}".format(description))
+    # Select or enter a description
+    last_descriptions = last_descriptions_from_csv(3)
+    if last_descriptions:
+        stdscr.addstr(0, 0, "Select a description:")
         stdscr.refresh()
+        description = select_description(stdscr, last_descriptions)
+    else:
+        stdscr.addstr(0, 0, "Enter a description:")
+        stdscr.refresh()
+        description = ""
+        while True:
+            c = stdscr.getch()
+            if c == curses.KEY_ENTER or c == 10 or c == 13:
+                break
+            elif c == curses.KEY_BACKSPACE:
+                description = description[:-1]
+            else:
+                description += chr(c)
+            stdscr.clear()
+            stdscr.addstr(0, 0, "Enter a description: {}".format(description))
+            stdscr.refresh()
 
     # Select or enter a project
     project_list = get_project_list()
