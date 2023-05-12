@@ -118,7 +118,7 @@ def select_description(stdscr, descriptions):
     selected_index = -1
     custom_description = ""
     while True:
-        stdscr.clear()
+        stdscr.erase()
         stdscr.addstr(0, 0, "Select a description or enter a new one:")
         for i, desc in enumerate(descriptions):
             if i == selected_index:
@@ -194,9 +194,10 @@ def main(stdscr):
                 description = description[:-1]
             else:
                 description += chr(c)
-            stdscr.clear()
+            stdscr.erase()  # Use erase instead of clear
             stdscr.addstr(0, 0, "Enter a description: {}".format(description))
             stdscr.refresh()
+
 
     # Select or enter a project
     project_list = get_project_list()
@@ -235,7 +236,6 @@ def main(stdscr):
         if c == ord('q'):
             break
         elif c == ord('p'):
-            stdscr.clear()
             stdscr.addstr(0, 0, "Timer stopped at {}".format(time.strftime("%Y-%m-%d %H:%M:%S")))
             stdscr.refresh()
             elapsed_time = time.time() - start_time
@@ -251,13 +251,7 @@ def main(stdscr):
             break
         current_time = time.time()
         elapsed_time = current_time - start_time
-        stdscr.clear()
-        start_time_str = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(start_time))
-        stdscr.addstr(0, 0, "Timer started at {}".format(start_time_str))
-        stdscr.addstr(1, 0, "Description: {}".format(description))
-        stdscr.addstr(2, 0, "Project: {}".format(project))
         stdscr.addstr(3, 0, "Elapsed time: {}".format(format_time(elapsed_time)), curses.color_pair(1))
-        stdscr.addstr(4, 0, "Press 'p' to stop the timer or 'q' to quit.")
         stdscr.refresh()
         time.sleep(1)
 
