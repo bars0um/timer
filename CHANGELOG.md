@@ -1,3 +1,14 @@
+19-05-2023 - version 0.03
+========== 
+
+- show more info about prior tasks
+
+
+12-05-2023 - version 0.02
+========== 
+
+- fix screen flickers
+
 10-05-2023 - version 0.01
 ========== 
 
@@ -7,8 +18,4 @@
 - allow user to choose from the last 3 tasks
 
 
-12-05-2023 - version 0.02
-========== 
-
-- fix screen flickers
 

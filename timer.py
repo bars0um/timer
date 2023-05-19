@@ -10,6 +10,27 @@ import logging
 # Set up logging
 logging.basicConfig(filename="timer.log", level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
+#...
+def last_descriptions_from_csv(n=3):
+    """Retrieve the last n descriptions from the CSV file, along with their dates and durations"""
+    records = []
+    with open("timesheet.csv", newline="") as f:
+        reader = csv.reader(f)
+        for row in reader:
+            if len(row) >= 4:
+                records.append(row[:4])  # Get the date, duration, and description
+    return records[-n:]
+
+def display_timesheet(stdscr):
+    """Display all entries from the timesheet at the bottom of the screen"""
+    try:
+        with open("timesheet.csv", newline="") as f:
+            reader = csv.reader(f)
+            y = stdscr.getmaxyx()[0] - 1  # Bottom of the screen
+            for i, row in enumerate(reversed(list(reader))):
+                stdscr.addstr(y - i, 0, " | ".join(row))
+    except FileNotFoundError:
+        pass
 
 def check_git_pull():
     """Performs a git pull and checks if any changes were made."""
@@ -113,41 +134,52 @@ def input_project(stdscr):
         stdscr.refresh()
     return project
 
-def select_description(stdscr, descriptions):
+def select_description(stdscr, records):
     """Select a description from the last 3 tasks or enter a new one"""
     selected_index = -1
     custom_description = ""
+
+    # define the headers
+    headers = ["Date", "Duration", "Description", "Project"]
+
     while True:
         stdscr.erase()
         stdscr.addstr(0, 0, "Select a description or enter a new one:")
-        for i, desc in enumerate(descriptions):
+
+        # draw the table headers
+        for i, header in enumerate(headers):
+            stdscr.addstr(2, i*25, header)
+
+        for i, record in enumerate(records):
+            date, duration, desc, project = record
+
+            # Highlight selected row
             if i == selected_index:
-                stdscr.addstr(i+1, 0, "> {}".format(desc))
-            else:
-                stdscr.addstr(i+1, 0, "  {}".format(desc))
-        stdscr.addstr(len(descriptions)+1, 0, "Custom: {}".format(custom_description))
+                stdscr.attron(curses.A_REVERSE)
+
+            stdscr.addstr(i+3, 0, f"{date:20}")
+            stdscr.addstr(i+3, 25, f"{duration:20}")
+            stdscr.addstr(i+3, 50, f"{desc[:20]:20}")
+            stdscr.addstr(i+3, 75, f"{project[:20]:20}")
+
+            if i == selected_index:
+                stdscr.attroff(curses.A_REVERSE)
+
+        stdscr.addstr(len(records)+3, 0, "Custom: {}".format(custom_description))
         stdscr.refresh()
+
         c = stdscr.getch()
         if c == curses.KEY_UP:
-            selected_index = max(-1, selected_index - 1)
+            selected_index = max(0, selected_index - 1)
         elif c == curses.KEY_DOWN:
-            selected_index = min(len(descriptions) - 1, selected_index + 1)
+            selected_index = min(len(records) - 1, selected_index + 1)
         elif c == ord('\n'):
-            return descriptions[selected_index] if selected_index >= 0 else custom_description
-        elif c == curses.KEY_BACKSPACE:
+            return records[selected_index][2] if selected_index >= 0 else custom_description
+        elif c == curses.KEY_BACKSPACE or c == 127:
             custom_description = custom_description[:-1]
-        else:
+        elif c != -1:  # Ignore timeout (-1)
             custom_description += chr(c)
 
-def last_descriptions_from_csv(n=3):
-    """Retrieve the last n descriptions from the CSV file"""
-    descriptions = []
-    with open("timesheet.csv", newline="") as f:
-        reader = csv.reader(f)
-        for row in reader:
-            if len(row) > 2:
-                descriptions.append(row[2])
-    return descriptions[-n:]
 
 def main(stdscr):
     """Main function"""
@@ -176,12 +208,18 @@ def main(stdscr):
     stdscr.bkgd(curses.color_pair(2))
 #    stdscr.timeout(1000)  # Set timeout to 1000 ms (1 second)
 
+# Display all entries from the timesheet.csv
+    display_timesheet(stdscr)
+
     # Select or enter a description
-    last_descriptions = last_descriptions_from_csv(3)
+    last_descriptions = last_descriptions_from_csv(10)
     if last_descriptions:
         stdscr.addstr(0, 0, "Select a description:")
         stdscr.refresh()
         description = select_description(stdscr, last_descriptions)
+        if description:
+            # Extract the actual description from the selected option
+            description = description.split(" - ", 2)[-1]
     else:
         stdscr.addstr(0, 0, "Enter a description:")
         stdscr.refresh()
