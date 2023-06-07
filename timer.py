@@ -26,11 +26,18 @@ def display_timesheet(stdscr):
     try:
         with open("timesheet.csv", newline="") as f:
             reader = csv.reader(f)
-            y = stdscr.getmaxyx()[0] - 1  # Bottom of the screen
+            y, x = stdscr.getmaxyx()  # get the height and width of the screen
             for i, row in enumerate(reversed(list(reader))):
-                stdscr.addstr(y - i, 0, " | ".join(row))
+                # If i is equal to or greater than y, break the loop
+                if i >= y:
+                    break
+                row_str = " | ".join(row)
+                if len(row_str) > x:
+                    row_str = row_str[:x-3] + "..."
+                stdscr.addstr(y - i - 1, 0, row_str)  # use y - i - 1 instead of y - i
     except FileNotFoundError:
         pass
+
 
 def check_git_pull():
     """Performs a git pull and checks if any changes were made."""
