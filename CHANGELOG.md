@@ -1,3 +1,7 @@
+12-09-2023 - version 0.04
+=========
+tinker.py implements the same code but with TKinter to provide a simpler interface and a summary page
+
 19-05-2023 - version 0.03
 ========== 
 
@@ -16,6 +20,7 @@
 - added logging
 - download is made again before upload when stopping the timer to ensure we are using the latest timesheet when recording time
 - allow user to choose from the last 3 tasks
+
 
 
 
