@@ -71,7 +71,8 @@ class TimesheetApp:
         
         self.start_time = None
         self.project_var = StringVar()
-        
+        self.already_started = False
+        self.paused = False 
         # Initialize labels for description and project titles
         self.description_label = Label(master, text="")
         self.project_label = Label(master, text="")
@@ -101,6 +102,8 @@ class TimesheetApp:
         
         self.details_button = Button(master, text="Summary", command=self.show_details_window)
         self.details_button.pack()
+        # Add a button to resume the timer
+        self.resume_button = Button(master, text="Resume Timer", command=self.resume_timer)
         
         self.update_clock()
 
@@ -231,21 +234,39 @@ class TimesheetApp:
         self.description_label.config(text=f"{self.description}")
         self.description_label.pack()
 
-        self.start_time = time.time()
+        if not self.already_started:
+            self.start_time = time.time()
+            self.already_started = True
+
         self.timer_label.pack()
         # Display the stop button when the timer starts
         self.stop_button.pack()
         self.update_clock()
     
     def stop_timer(self):
+        self.pause_start_time = time.time()
+        self.paused = True
         self.start_time_str  = time.strftime("%Y-%m-%d %H:%M:%S", time.localtime(self.start_time))
         self.elapsed_time = time.time() - self.start_time
 
         # Hide the timer label and stop button, and show the input fields again
-        self.stop_button.pack_forget()        
+        self.resume_button.pack()
         self.save_button.pack()
+        self.stop_button.pack_forget()
+        
+        
         # Reset the start time to stop the timer
-        self.start_time = None
+        #self.start_time = None
+
+    def resume_timer(self):
+        self.paused = False
+        pause_duration = time.time() - self.pause_start_time
+        self.start_time += pause_duration
+        self.resume_button.pack_forget()  # Hide the resume button
+        self.save_button.pack_forget()  # Hide the save button when resuming
+        self.start_button.invoke()  # Invoke the start button's action to start the timer again
+
+
         
     def save_entry(self):
         self.save_button.pack_forget()
@@ -258,11 +279,11 @@ class TimesheetApp:
         self.master.destroy()
 
     def update_clock(self):
-        if self.start_time:
-            elapsed_time = time.time() - self.start_time
+        if self.start_time and not self.paused:
+            elapsed_time = time.time() - self.start_time 
             mins, sec = divmod(elapsed_time, 60)
             hours, mins = divmod(mins, 60)
-            self.timer_label.config(text="Elapsed time: {:02d}:{:02d}:{:02d}".format(int(hours), int(mins), int(sec)))
+            self.timer_label.config(text="Elapsed time:\n{:02d}:{:02d}:{:02d}".format(int(hours), int(mins), int(sec)))
             
             # Update the timer label every second
             self.master.after(1000, self.update_clock)
