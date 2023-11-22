@@ -1,10 +1,12 @@
 from datetime import datetime, timedelta
-
+import sys
+import os
 import time
 import csv
 import subprocess
 import logging
 from tkinter import Tk, Label, Button, Entry, Listbox, StringVar, Toplevel, Text, BOTH, YES, NONE, DISABLED, Scrollbar, RIGHT, Frame, Canvas, Y
+import argparse
 
 from tkinter import ttk
 from tkinter.ttk import Combobox
@@ -31,7 +33,7 @@ def save_time(description, project, elapsed_time_seconds,start_time_str):
         elapsed_time_seconds = int(elapsed_time_seconds % 60)
         elapsed_time_str = "{:02d}:{:02d}:{:02d}".format(elapsed_time_hours, elapsed_time_minutes, elapsed_time_seconds)
         
-        with open("timesheet.csv", "a", newline="") as f:
+        with open(properties['timesheet_path'], "a", newline="") as f:
             writer = csv.writer(f)
             writer.writerow([start_time_str, elapsed_time_str, description, project])
 
@@ -39,9 +41,10 @@ def download_timesheet(properties):
     if not properties['remote_save'] == "true":
         return
     """Downloads timesheet.csv from the remote system using SCP."""
-    logging.info(f"Downloading latest version of timesheet...")
     remote_path = f"{properties['host']}:{properties['path']}/timesheet.csv"
-    subprocess.run(["scp", remote_path, "timesheet.csv"])
+    subprocess.run(["scp", remote_path, properties['timesheet_path']])
+    logging.info(f"Downloading latest version of timesheet...scp {remote_path} {properties['timesheet_path']}")
+
 
 
 def upload_timesheet(properties):
@@ -50,7 +53,7 @@ def upload_timesheet(properties):
     """Uploads timesheet.csv to the remote system using SCP."""
     logging.info(f"Uploading latest version of timesheet...")
     remote_path = f"{properties['host']}:{properties['path']}/timesheet.csv"
-    subprocess.run(["scp", "timesheet.csv", remote_path])
+    subprocess.run(["scp", properties['timesheet_path'], remote_path])
     
 def parse_properties(filename):
     properties = {}
@@ -61,7 +64,6 @@ def parse_properties(filename):
     return properties
 
 # Set up logging
-logging.basicConfig(filename="timer.log", level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
 
 class TimesheetApp:
@@ -109,10 +111,10 @@ class TimesheetApp:
 
     def get_descriptions_with_durations(self):
         data = []
-        monthly_data = {}
+        monthly_data = defaultdict(lambda: {'entries': [], 'total_duration': timedelta(), 'project_durations': defaultdict(timedelta)})
 
         try:
-            with open('timesheet.csv', 'r') as f:
+            with open(properties['timesheet_path'], 'r') as f:
                 reader = csv.reader(f)
                 for row in reader:
                     if row:
@@ -122,36 +124,81 @@ class TimesheetApp:
                         elapsed_td = timedelta(hours=elapsed_h, minutes=elapsed_m, seconds=elapsed_s)
 
                         month_key = start_dt.strftime('%Y-%m')
-                        if month_key not in monthly_data:
-                            monthly_data[month_key] = {'entries': [], 'total_duration': timedelta()}
-
                         monthly_data[month_key]['entries'].append({
                             'Date': start_dt.strftime('%Y-%m-%d'), 
                             'Description': description, 
-                            'Duration': elapsed_td
+                            'Duration': elapsed_td,
+                            'Project': project
                         })
                         monthly_data[month_key]['total_duration'] += elapsed_td
+                        monthly_data[month_key]['project_durations'][project] += elapsed_td
 
             for month_key, month_data in monthly_data.items():
-                month_name = datetime.strptime(month_key, '%Y-%m').strftime('%B %Y')  # Convert month key to month name
-                data.append({'Date': f'Month: {month_name}', 'Description': '', 'Duration': ''})
+                month_name = datetime.strptime(month_key, '%Y-%m').strftime('%B %Y')
+                data.append({'Date': f'Month: {month_name}', 'Description': '', 'Duration': '', 'Project': 'All'})
                 data.extend(month_data['entries'])
-                data.append({
-                    'Date': 'Monthly Total', 
-                    'Description': '', 
-                    'Duration': format_timedelta(month_data['total_duration'])  # Use the new format
-                })
+                for project, duration in month_data['project_durations'].items():
+                    # Append monthly total for each project
+                    data.append({
+                        'Date': 'Monthly Total', 
+                        'Description': '', 
+                        'Duration': format_timedelta(duration),
+                        'Project': project
+                    })
 
         except FileNotFoundError:
             pass
 
         return data
 
+    def update_summary_view(self, scrollable_frame, project_filter):
+        bg_color1 = "#703224"  # A light gray color
 
+        # Clear previous content
+        for widget in scrollable_frame.winfo_children():
+            widget.destroy()
+
+        # Filtered data based on project
+        descriptions_with_durations = self.get_descriptions_with_durations()
+        
+        if project_filter:
+            descriptions_with_durations = [item for item in descriptions_with_durations if item.get('Project') == project_filter or (item.get('Date') == 'Monthly Total' and item.get('Project') == project_filter)]
+
+        logging.info(f"showing {project_filter}")
+
+         # Display filtered data
+        for index, row_data in enumerate(descriptions_with_durations):
+            if "Month:" in row_data['Date']:
+                Label(scrollable_frame, text=row_data['Date'], width=70, bg=bg_color1, anchor='w').grid(row=index, column=0, columnspan=4)
+            elif "Monthly Total" in row_data['Date']:
+                #Label(scrollable_frame, text=row_data['Date'], width=10, anchor='w').grid(row=index, column=0)
+                #Label(scrollable_frame, text=row_data['Description'], width=50, anchor='w').grid(row=index, column=1)
+                Label(scrollable_frame, text=row_data['Duration'], width=70,bg=bg_color1, anchor='center').grid(row=index, column=0, columnspan=4)  # Center align the duration
+            else:
+                Label(scrollable_frame, text=row_data['Date'], width=10).grid(row=index, column=0)
+                Label(scrollable_frame, text=row_data['Description'], width=50).grid(row=index, column=1)
+                Label(scrollable_frame, text=row_data['Duration'], width=10).grid(row=index, column=2)
+     
+        return descriptions_with_durations
 
     def show_details_window(self):
+        bg_color1 = "#703224"  # A light gray color
+
         new_window = Toplevel(self.master)
         new_window.title("Details Window")
+
+
+        # Retrieve the currently selected project
+        selected_project = self.project_combobox.get()
+
+        # Project selection for filtering
+        project_filter_var = StringVar(value=selected_project)
+        project_filter_combobox = Combobox(new_window, textvariable=project_filter_var, values=self.unique_projects)
+        project_filter_combobox.pack()
+
+        # Button to apply filter
+        filter_button = Button(new_window, text="Filter", command=lambda: self.update_summary_view(scrollable_frame, project_filter_var.get()))
+        filter_button.pack()
  
         # Set initial size
         new_window.geometry("800x600")  # Adjust width (800) and height (600) as per your requirement
@@ -177,9 +224,9 @@ class TimesheetApp:
 
         canvas.create_window((0, 0), window=scrollable_frame, anchor="nw")
         canvas.configure(yscrollcommand=scrollbar.set)
+        
 
-        descriptions_with_durations = self.get_descriptions_with_durations()
-        bg_color1 = "#703224"  # A light gray color
+        descriptions_with_durations = self.update_summary_view(scrollable_frame, None)
 
         for index, row_data in enumerate(descriptions_with_durations):
             if "Month:" in row_data['Date']:
@@ -203,7 +250,7 @@ class TimesheetApp:
         last_project = None
 
         try:
-            with open('timesheet.csv', 'r') as f:
+            with open(properties['timesheet_path'], 'r') as f:
                 reader = csv.reader(f)
                 for row in reader:
                     if row:
@@ -297,9 +344,34 @@ class TimesheetApp:
 
 # Run the Tkinter app
 if __name__ == "__main__":
+
+    parser = argparse.ArgumentParser(description='Track Time')
+    parser.add_argument('-log', dest='loglevel', type=str, default='info', required=False, help='log level')
+    parser.add_argument('-work', dest='workdir', type=str, default='.')
+    parser.add_argument('-host', dest='host', type=str, default='timer')
+    parser.add_argument('-hostpath', dest='hostpath', type=str, default='~/timer')
+    parser.add_argument('-remote', dest='remote', type=str, default='true')
+
+    args = parser.parse_args()
+    args.workdir = os.path.expanduser(args.workdir)  # Add this line to expand '~' to the user's home directory
+
+    properties = {
+        "host": args.host,
+        "path": args.hostpath,
+        "workdir": args.workdir,
+        "remote_save": args.remote,
+        "timesheet_path" : f"{args.workdir}{os.sep}timesheet.csv"
+    }
+    log_path = f"{properties['workdir']}{os.sep}timer.log"
+    
+    logging.basicConfig(filemode="w",force=True,filename=f"{log_path}", level=args.loglevel.upper(), format="%(asctime)s - %(levelname)s - %(message)s")
+    
+    logging.info("started timer app")
+    #sys.exit()
+
     root = Tk()
     # Read properties from the timer.properties file
-    properties = parse_properties("timer.properties")
+    
     # Download timesheet.csv from the remote system
     download_timesheet(properties)
     app = TimesheetApp(root)
